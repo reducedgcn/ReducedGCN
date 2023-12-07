@@ -20,5 +20,4 @@ slurm_log
 _SUCCESS
 .rendered.sampling.cpp
 *.pt
-config/
 srun/

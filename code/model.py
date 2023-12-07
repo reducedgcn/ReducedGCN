@@ -186,6 +186,12 @@ class RGCN(nn.Module):
         )
 
     def computer(self):
+        '''
+        Below code is an example of applying ReducedGCN to LightGCN.
+            Reference: https://github.com/gusye1234/LightGCN-PyTorch
+        If you want to apply ReducedGCN to other GCN-based model,
+        you may fix the message passing and final representation part below.
+        '''
         users_emb = self.embedding_user.weight
         items_emb = self.embedding_item.weight
         all_emb = torch.cat([users_emb, items_emb])
@@ -206,6 +212,7 @@ class RGCN(nn.Module):
             G = torch.sparse.FloatTensor(
                 torch.stack([g_row, g_col]), g_values, torch.Size(g_droped.shape)
             )
+            # message passing for global community
             global_emb = torch.sparse.mm(G, all_emb)
 
             local_emb = torch.zeros(global_emb.shape).to(self.config["device"])
@@ -221,15 +228,20 @@ class RGCN(nn.Module):
                     torch.stack([l_row, l_col]), l_values, torch.Size(local_graph.shape)
                 )
                 c_emb = all_emb[local_nodes, :]
+                
+                # message passing for sub-communities
                 c_emb = torch.sparse.mm(localG, c_emb)
+                
                 c_emb = c_emb * self.anchor_sims[c, :][local_nodes].unsqueeze(1)
                 local_emb[local_nodes, :] = local_emb[local_nodes, :] + c_emb
                 self.local_graph_list[c] = localG
 
             all_emb = self.emb_weights[0] * global_emb + self.emb_weights[1] * local_emb
             embs.append(all_emb)
-
+        
+        # final representation
         embs = torch.stack(embs, dim=1)
         out = torch.mean(embs, dim=1)
         users, items = torch.split(out, [self.num_users, self.num_items])
+        
         return users, items
